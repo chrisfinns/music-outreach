@@ -75,8 +75,8 @@ function Dashboard() {
         });
         const updatedBand = await updateResponse.json();
 
-        // Update state with the complete band
-        setBands(bands.map(b => b.id === newBand.id ? updatedBand : b));
+        // Update state with the complete band (use functional update to avoid stale closure)
+        setBands(prevBands => prevBands.map(b => b.id === newBand.id ? updatedBand : b));
       } catch (error) {
         console.error('Error generating message:', error);
         // Update band to show generation failed
@@ -88,7 +88,7 @@ function Dashboard() {
           }),
         });
         const updatedBand = await updateResponse.json();
-        setBands(bands.map(b => b.id === newBand.id ? updatedBand : b));
+        setBands(prevBands => prevBands.map(b => b.id === newBand.id ? updatedBand : b));
       }
     } catch (error) {
       console.error('Error adding band:', error);
@@ -97,15 +97,21 @@ function Dashboard() {
 
   const handleUpdateBand = async (id, updates) => {
     try {
+      console.log('[handleUpdateBand] Starting update for band:', id, 'with updates:', updates);
       const response = await fetch(`${API_URL}/bands/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
       const updatedBand = await response.json();
-      setBands(bands.map(b => b.id === id ? updatedBand : b));
+      console.log('[handleUpdateBand] Received updated band from API:', updatedBand);
+      setBands(prevBands => {
+        const newBands = prevBands.map(b => b.id === id ? updatedBand : b);
+        console.log('[handleUpdateBand] Setting new bands state:', newBands);
+        return newBands;
+      });
     } catch (error) {
-      console.error('Error updating band:', error);
+      console.error('[handleUpdateBand] Error updating band:', error);
     }
   };
 
@@ -114,7 +120,7 @@ function Dashboard() {
       await fetch(`${API_URL}/bands/${id}`, {
         method: 'DELETE',
       });
-      setBands(bands.filter(b => b.id !== id));
+      setBands(prevBands => prevBands.filter(b => b.id !== id));
     } catch (error) {
       console.error('Error deleting band:', error);
     }
@@ -122,9 +128,13 @@ function Dashboard() {
 
   const handleRegenerateMessage = async (band) => {
     try {
+      console.log('[handleRegenerateMessage] Starting regeneration for band:', band);
+
       // Update status to generating
+      console.log('[handleRegenerateMessage] Step 1: Setting status to generating');
       await handleUpdateBand(band.id, { messageStatus: 'generating' });
 
+      console.log('[handleRegenerateMessage] Step 2: Calling generate-message API');
       const response = await fetch(`${API_URL}/generate-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -137,13 +147,16 @@ function Dashboard() {
         }),
       });
       const { message } = await response.json();
+      console.log('[handleRegenerateMessage] Step 3: Received message from API:', message);
 
+      console.log('[handleRegenerateMessage] Step 4: Updating band with generated message');
       await handleUpdateBand(band.id, {
         generatedMessage: message,
         messageStatus: 'ready',
       });
+      console.log('[handleRegenerateMessage] ✅ Complete!');
     } catch (error) {
-      console.error('Error regenerating message:', error);
+      console.error('[handleRegenerateMessage] ❌ Error:', error);
       await handleUpdateBand(band.id, { messageStatus: 'failed' });
     }
   };

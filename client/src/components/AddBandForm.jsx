@@ -18,7 +18,12 @@ function AddBandForm({ onSubmit }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData);
+    // Auto-prepend @ to Instagram if it doesn't have one
+    const submissionData = {
+      ...formData,
+      instagram: formData.instagram.startsWith('@') ? formData.instagram : `@${formData.instagram}`
+    };
+    onSubmit(submissionData);
     // Clear form after submission
     setFormData({
       bandName: '',
