@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const [editData, setEditData] = useState({
     bandName: band.bandName,
     members: band.members,
@@ -10,6 +11,7 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
     instagram: band.instagram,
     notes: band.notes,
     followUpNotes: band.followUpNotes || '',
+    generatedMessage: band.generatedMessage || '',
   });
 
   // Handle ESC key to close modal
@@ -42,12 +44,27 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
     setIsEditing(false);
   };
 
+  // Reset edit data when band changes or modal opens
+  useEffect(() => {
+    setEditData({
+      bandName: band.bandName,
+      members: band.members,
+      song: band.song,
+      instagram: band.instagram,
+      notes: band.notes,
+      followUpNotes: band.followUpNotes || '',
+      generatedMessage: band.generatedMessage || '',
+    });
+  }, [band, isOpen]);
+
   const handleCopyMessage = async () => {
     try {
-      await navigator.clipboard.writeText(band.generatedMessage);
-      alert('Message copied to clipboard!');
+      await navigator.clipboard.writeText(editData.generatedMessage);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
     } catch (error) {
       console.error('Failed to copy:', error);
+      alert('Failed to copy to clipboard');
     }
   };
 
@@ -147,8 +164,8 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-gray-700">Instagram</label>
-                <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-gray-700 block text-center">Instagram</label>
+                <div className="flex items-center justify-center gap-2">
                   <p className="text-sm text-gray-900">{band.instagram}</p>
                   <button
                     onClick={handleOpenInstagram}
@@ -167,10 +184,13 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
               {band.generatedMessage && (
                 <div>
                   <label className="text-xs font-semibold text-gray-700">Generated Message</label>
-                  <div className="mt-1 p-3 bg-white rounded border border-gray-200">
-                    <p className="text-sm text-gray-900 whitespace-pre-wrap">{band.generatedMessage}</p>
-                  </div>
-                  <div className="mt-2 flex gap-2">
+                  <textarea
+                    value={editData.generatedMessage}
+                    onChange={(e) => setEditData({ ...editData, generatedMessage: e.target.value })}
+                    rows={10}
+                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                  />
+                  <div className="mt-2 flex gap-2 items-center">
                     <button
                       onClick={handleCopyMessage}
                       className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
@@ -184,6 +204,9 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
                     >
                       Regenerate
                     </button>
+                    {copySuccess && (
+                      <span className="text-xs text-green-600 font-medium">Copied!</span>
+                    )}
                   </div>
                 </div>
               )}
@@ -316,6 +339,7 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
                           instagram: band.instagram,
                           notes: band.notes,
                           followUpNotes: band.followUpNotes || '',
+                          generatedMessage: band.generatedMessage || '',
                         });
                         setIsEditing(false);
                       }}
