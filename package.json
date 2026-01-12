@@ -22,6 +22,7 @@
   "homepage": "https://github.com/chrisfinns/music-outreach#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "airtable": "^0.12.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1"

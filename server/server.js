@@ -5,6 +5,8 @@ const path = require('path');
 const cors = require('cors');
 require('dotenv').config();
 
+const airtableService = require('./airtable-service');
+
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -20,22 +22,34 @@ try {
   console.warn('Anthropic API not initialized. Add your API key to .env file.');
 }
 
+// Keep JSON file as backup/fallback for settings (system prompt, daily count)
 const DB_FILE = path.join(__dirname, '..', 'crm-data.json');
 
-// Helper to read/write data
-const getDb = () => {
+// Helper to read/write settings data (not bands - those are in Airtable now)
+const getSettings = () => {
   if (!fs.existsSync(DB_FILE)) {
     return {
-      bands: [],
       systemPrompt: "You are a friendly music enthusiast reaching out to bands on Instagram. Write a personalized, genuine message that shows you've actually listened to their music. Be concise (2-3 sentences), enthusiastic but not over-the-top, and mention specific details from the user's notes. End with a clear call-to-action or question about their music.",
       dailyCount: 0,
       lastReset: new Date().toDateString()
     };
   }
-  return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  const data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  return {
+    systemPrompt: data.systemPrompt,
+    dailyCount: data.dailyCount,
+    lastReset: data.lastReset
+  };
 };
 
-const saveDb = (data) => {
+const saveSettings = (settings) => {
+  let data = {};
+  if (fs.existsSync(DB_FILE)) {
+    data = JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+  }
+  data.systemPrompt = settings.systemPrompt;
+  data.dailyCount = settings.dailyCount;
+  data.lastReset = settings.lastReset;
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 };
 
@@ -77,89 +91,96 @@ Please create a personalized, engaging outreach message.`
 });
 
 // Create new band
-app.post('/api/bands', (req, res) => {
-  const db = getDb();
-  const newBand = {
-    ...req.body,
-    id: Date.now().toString(),
-    status: 'not_messaged',
-    dateAdded: new Date().toISOString(),
-    lastUpdated: new Date().toISOString(),
-    generatedMessage: '',
-    followUpNotes: '',
-    messageStatus: 'generating'
-  };
-  db.bands.push(newBand);
-  saveDb(db);
-  res.json(newBand);
+app.post('/api/bands', async (req, res) => {
+  try {
+    const newBand = await airtableService.createBand({
+      ...req.body,
+      status: 'not_messaged',
+      generatedMessage: '',
+      followUpNotes: '',
+      messageStatus: 'generating'
+    });
+    res.json(newBand);
+  } catch (error) {
+    console.error('Error creating band:', error);
+    res.status(500).json({ error: 'Failed to create band' });
+  }
 });
 
 // Update band (status change, edit info, add notes)
-app.patch('/api/bands/:id', (req, res) => {
-  const db = getDb();
-  const index = db.bands.findIndex(b => b.id === req.params.id);
-  if (index > -1) {
-    db.bands[index] = {
-      ...db.bands[index],
-      ...req.body,
-      lastUpdated: new Date().toISOString()
-    };
+app.patch('/api/bands/:id', async (req, res) => {
+  try {
+    // Get the band before update to check status change
+    const oldBand = await airtableService.getBandById(req.params.id);
+
+    // Update the band
+    const updatedBand = await airtableService.updateBand(req.params.id, req.body);
 
     // Increment daily counter if status changed to 'messaged'
-    if (req.body.status === 'messaged' && db.bands[index].status !== 'messaged') {
+    if (req.body.status === 'messaged' && oldBand.status !== 'messaged') {
+      const settings = getSettings();
       const today = new Date().toDateString();
-      if (db.lastReset !== today) {
-        db.dailyCount = 0;
-        db.lastReset = today;
+      if (settings.lastReset !== today) {
+        settings.dailyCount = 0;
+        settings.lastReset = today;
       }
-      db.dailyCount++;
+      settings.dailyCount++;
+      saveSettings(settings);
     }
 
-    saveDb(db);
-    res.json(db.bands[index]);
-  } else {
-    res.status(404).json({ error: 'Band not found' });
+    res.json(updatedBand);
+  } catch (error) {
+    console.error('Error updating band:', error);
+    res.status(500).json({ error: 'Failed to update band' });
   }
 });
 
 // Delete band
-app.delete('/api/bands/:id', (req, res) => {
-  const db = getDb();
-  db.bands = db.bands.filter(b => b.id !== req.params.id);
-  saveDb(db);
-  res.json({ success: true });
+app.delete('/api/bands/:id', async (req, res) => {
+  try {
+    await airtableService.deleteBand(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting band:', error);
+    res.status(500).json({ error: 'Failed to delete band' });
+  }
 });
 
 // Get all bands
-app.get('/api/bands', (req, res) => {
-  const db = getDb();
-  res.json(db.bands);
+app.get('/api/bands', async (req, res) => {
+  try {
+    const bands = await airtableService.getAllBands();
+    res.json(bands);
+  } catch (error) {
+    console.error('Error fetching bands:', error);
+    res.status(500).json({ error: 'Failed to fetch bands' });
+  }
 });
 
 // Get daily count
 app.get('/api/daily-count', (req, res) => {
-  const db = getDb();
+  const settings = getSettings();
   const today = new Date().toDateString();
-  if (db.lastReset !== today) {
-    db.dailyCount = 0;
-    db.lastReset = today;
-    saveDb(db);
+  if (settings.lastReset !== today) {
+    settings.dailyCount = 0;
+    settings.lastReset = today;
+    saveSettings(settings);
   }
-  res.json({ count: db.dailyCount, limit: 20 });
+  res.json({ count: settings.dailyCount, limit: 20 });
 });
 
 // Update system prompt
 app.post('/api/system-prompt', (req, res) => {
-  const db = getDb();
-  db.systemPrompt = req.body.prompt;
-  saveDb(db);
+  const settings = getSettings();
+  settings.systemPrompt = req.body.prompt;
+  saveSettings(settings);
   res.json({ success: true });
 });
 
 // Get system prompt
 app.get('/api/system-prompt', (req, res) => {
-  const db = getDb();
-  res.json({ prompt: db.systemPrompt });
+  const settings = getSettings();
+  res.json({ prompt: settings.systemPrompt });
 });
 
 const PORT = process.env.PORT || 3000;
