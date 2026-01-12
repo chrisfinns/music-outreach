@@ -59,7 +59,8 @@ const formatBandForAirtable = (band) => {
   // Add optional fields if they exist
   if (band.members) fields['Members'] = band.members;
   if (band.followUpNotes) fields['Follow-up Notes'] = band.followUpNotes;
-  if (band.messageStatus) fields['Message Status'] = band.messageStatus; // Store messageStatus if field exists
+  // Note: Message Status field not added to Airtable yet, skip for now
+  // if (band.messageStatus) fields['Message Status'] = band.messageStatus;
   // Note: "Last Updated" is auto-computed by Airtable, don't set it manually
 
   return fields;
@@ -143,7 +144,8 @@ class AirtableService {
       if (updates.notes !== undefined) fields['Original Notes'] = updates.notes;
       if (updates.generatedMessage !== undefined) fields['Generated Message'] = updates.generatedMessage;
       if (updates.followUpNotes !== undefined) fields['Follow-up Notes'] = updates.followUpNotes;
-      if (updates.messageStatus !== undefined) fields['Message Status'] = updates.messageStatus;
+      // Note: Message Status field not in Airtable yet, skip for now
+      // if (updates.messageStatus !== undefined) fields['Message Status'] = updates.messageStatus;
       if (updates.status !== undefined) fields['Status'] = mapStatusToAirtable(updates.status);
 
       // Note: "Last Updated" is auto-computed by Airtable, don't set it manually
