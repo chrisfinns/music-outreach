@@ -98,6 +98,12 @@ function Dashboard() {
   const handleUpdateBand = async (id, updates) => {
     try {
       console.log('[handleUpdateBand] Starting update for band:', id, 'with updates:', updates);
+
+      // Optimistic update: immediately update UI before API call
+      setBands(prevBands =>
+        prevBands.map(b => b.id === id ? { ...b, ...updates } : b)
+      );
+
       const response = await fetch(`${API_URL}/bands/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -105,6 +111,8 @@ function Dashboard() {
       });
       const updatedBand = await response.json();
       console.log('[handleUpdateBand] Received updated band from API:', updatedBand);
+
+      // Update with server response to ensure consistency
       setBands(prevBands => {
         const newBands = prevBands.map(b => b.id === id ? updatedBand : b);
         console.log('[handleUpdateBand] Setting new bands state:', newBands);
@@ -112,6 +120,8 @@ function Dashboard() {
       });
     } catch (error) {
       console.error('[handleUpdateBand] Error updating band:', error);
+      // Optionally: revert optimistic update on error
+      fetchBands(); // Refresh from server
     }
   };
 
