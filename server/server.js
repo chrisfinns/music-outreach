@@ -277,7 +277,7 @@ app.get('/api/spotify/artist/:id', async (req, res) => {
   }
 });
 
-// Analyze playlist
+// Analyze playlist with Server-Sent Events for progress
 app.post('/api/spotify/analyze', async (req, res) => {
   try {
     const { playlistId, filters } = req.body;
@@ -286,15 +286,24 @@ app.post('/api/spotify/analyze', async (req, res) => {
       return res.status(400).json({ error: 'Playlist ID is required' });
     }
 
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
     const results = await spotifyAnalyzer.analyzePlaylist(
       playlistId,
-      filters || spotifyAnalyzer.DEFAULT_FILTERS
+      filters || spotifyAnalyzer.DEFAULT_FILTERS,
+      (progress) => {
+        res.write(`data: ${JSON.stringify({ type: 'progress', data: progress })}\n\n`);
+      }
     );
 
-    res.json(results);
+    res.write(`data: ${JSON.stringify({ type: 'complete', data: results })}\n\n`);
+    res.end();
   } catch (error) {
     console.error('Error analyzing playlist:', error);
-    res.status(500).json({ error: 'Failed to analyze playlist' });
+    res.write(`data: ${JSON.stringify({ type: 'error', error: 'Failed to analyze playlist' })}\n\n`);
+    res.end();
   }
 });
 

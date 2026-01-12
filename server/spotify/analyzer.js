@@ -1,5 +1,5 @@
 const spotifyApi = require('./api');
-const { scrapeInstagramHandlesWithDelay } = require('../scrapers/spotify');
+const { scrapeInstagramHandlesWithDelay } = require('../scrapers/spotify-playwright');
 
 const DEFAULT_FILTERS = {
   popularityMin: 2,
@@ -142,20 +142,26 @@ async function analyzePlaylist(playlistId, filters = DEFAULT_FILTERS, onProgress
           spotifyApi.getArtistAlbums(artistId)
         ]);
 
-        const popularityCheck = evaluatePopularity(artist, filters);
-        const releaseCheck = evaluateReleaseDate(latestRelease, filters);
+        // Handle rate limiting or API failures gracefully
+        if (!artist) {
+          console.error(`Failed to fetch artist data for ${artistId} (rate limited or error)`);
+          artistData.error = 'spotify_data_error';
+        } else {
+          const popularityCheck = evaluatePopularity(artist, filters);
+          const releaseCheck = evaluateReleaseDate(latestRelease, filters);
 
-        artistData.spotifyData = {
-          popularity: artist.popularity,
-          latestRelease: latestRelease ? latestRelease.releaseDate : null,
-          genres: artist.genres,
-          followers: artist.followers,
-          images: artist.images,
-          externalUrls: artist.externalUrls
-        };
+          artistData.spotifyData = {
+            popularity: artist.popularity,
+            latestRelease: latestRelease ? latestRelease.releaseDate : null,
+            genres: artist.genres,
+            followers: artist.followers,
+            images: artist.images,
+            externalUrls: artist.externalUrls
+          };
 
-        artistData.popularityCheck = popularityCheck;
-        artistData.releaseCheck = releaseCheck;
+          artistData.popularityCheck = popularityCheck;
+          artistData.releaseCheck = releaseCheck;
+        }
 
         if (onProgress) {
           onProgress({

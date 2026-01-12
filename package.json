@@ -27,6 +27,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "playwright": "^1.57.0",
     "spotify-web-api-node": "^5.0.2"
   },
   "devDependencies": {

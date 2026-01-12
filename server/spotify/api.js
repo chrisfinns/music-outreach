@@ -76,8 +76,16 @@ async function getArtist(artistId) {
       externalUrls: data.body.external_urls
     };
   } catch (error) {
+    // Handle 429 rate limiting gracefully
+    if (error.statusCode === 429) {
+      const retryAfter = error.headers?.['retry-after'] || 1;
+      console.log(`Rate limited fetching artist ${artistId}, waiting ${retryAfter}s`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      // Return null instead of crashing - analyzer will handle it
+      return null;
+    }
     console.error('Error fetching artist:', error);
-    throw new Error('Failed to fetch artist details');
+    return null;
   }
 }
 
@@ -109,8 +117,16 @@ async function getArtistAlbums(artistId) {
 
     return latestRelease;
   } catch (error) {
+    // Handle 429 rate limiting gracefully
+    if (error.statusCode === 429) {
+      const retryAfter = error.headers?.['retry-after'] || 1;
+      console.log(`Rate limited fetching albums for ${artistId}, waiting ${retryAfter}s`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      // Return null instead of crashing - analyzer will handle it
+      return null;
+    }
     console.error('Error fetching artist albums:', error);
-    throw new Error('Failed to fetch artist releases');
+    return null;
   }
 }
 

@@ -14,6 +14,7 @@ export default function PlaylistCleaner() {
   const [results, setResults] = useState(null);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [progress, setProgress] = useState(null);
 
   useEffect(() => {
     checkSpotifyStatus();
@@ -71,6 +72,7 @@ export default function PlaylistCleaner() {
 
     setAnalyzing(true);
     setResults(null);
+    setProgress(null);
 
     try {
       const response = await fetch('http://localhost:3000/api/spotify/analyze', {
@@ -82,9 +84,32 @@ export default function PlaylistCleaner() {
         })
       });
 
-      const data = await response.json();
-      setResults(data);
-      setShowConfirmation(true);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = JSON.parse(line.slice(6));
+
+            if (data.type === 'progress') {
+              setProgress(data.data);
+            } else if (data.type === 'complete') {
+              setResults(data.data);
+              setShowConfirmation(true);
+              setProgress(null);
+            } else if (data.type === 'error') {
+              throw new Error(data.error);
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error analyzing playlist:', error);
       alert('Failed to analyze playlist');
@@ -228,6 +253,35 @@ export default function PlaylistCleaner() {
               >
                 {analyzing ? 'Analyzing...' : 'Analyze Playlist'}
               </button>
+            </div>
+          )}
+
+          {analyzing && progress && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-semibold mb-4">Analysis Progress</h2>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">
+                    {progress.phase === 'fetching_artists' && 'Fetching Artist Data'}
+                    {progress.phase === 'scraping_instagram' && 'Checking Instagram Presence'}
+                    {progress.phase === 'evaluating' && 'Evaluating Results'}
+                  </span>
+                  <span className="text-sm font-medium text-gray-600">
+                    {progress.current} / {progress.total}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-blue-500 h-3 rounded-full transition-all duration-300"
+                    style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                  ></div>
+                </div>
+                {progress.artist && (
+                  <p className="text-sm text-gray-600">
+                    Currently processing: <span className="font-medium">{progress.artist}</span>
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
