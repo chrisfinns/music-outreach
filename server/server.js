@@ -6,6 +6,10 @@ const cors = require('cors');
 require('dotenv').config();
 
 const airtableService = require('./airtable-service');
+const settingsService = require('./settings-service');
+const spotifyAuth = require('./spotify/auth');
+const spotifyApi = require('./spotify/api');
+const spotifyAnalyzer = require('./spotify/analyzer');
 
 const app = express();
 app.use(express.json());
@@ -181,6 +185,165 @@ app.post('/api/system-prompt', (req, res) => {
 app.get('/api/system-prompt', (req, res) => {
   const settings = getSettings();
   res.json({ prompt: settings.systemPrompt });
+});
+
+// ===== SPOTIFY ENDPOINTS =====
+
+// Initiate Spotify OAuth flow
+app.get('/api/spotify/auth', (req, res) => {
+  try {
+    const authURL = spotifyAuth.getAuthURL();
+    res.json({ authURL });
+  } catch (error) {
+    console.error('Error generating Spotify auth URL:', error);
+    res.status(500).json({ error: 'Failed to generate auth URL' });
+  }
+});
+
+// Handle Spotify OAuth callback
+app.get('/api/spotify/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+
+    if (!code) {
+      return res.status(400).send('Authorization code missing');
+    }
+
+    const result = await spotifyAuth.handleCallback(code);
+
+    res.send(`
+      <html>
+        <body>
+          <h2>Spotify Connected Successfully!</h2>
+          <p>You can close this window and return to the app.</p>
+          <script>
+            setTimeout(() => window.close(), 2000);
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error('Error during Spotify callback:', error);
+    res.status(500).send('Failed to authenticate with Spotify');
+  }
+});
+
+// Get Spotify connection status
+app.get('/api/spotify/status', (req, res) => {
+  try {
+    const connected = settingsService.isSpotifyConnected();
+    const tokens = settingsService.getSpotifyTokens();
+    res.json({
+      connected,
+      expiresAt: tokens.expiresAt
+    });
+  } catch (error) {
+    console.error('Error checking Spotify status:', error);
+    res.status(500).json({ error: 'Failed to check Spotify status' });
+  }
+});
+
+// Disconnect Spotify
+app.post('/api/spotify/disconnect', (req, res) => {
+  try {
+    settingsService.clearSpotifyTokens();
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error disconnecting Spotify:', error);
+    res.status(500).json({ error: 'Failed to disconnect Spotify' });
+  }
+});
+
+// Get user's playlists
+app.get('/api/spotify/playlists', async (req, res) => {
+  try {
+    const playlists = await spotifyApi.getUserPlaylists();
+    res.json(playlists);
+  } catch (error) {
+    console.error('Error fetching playlists:', error);
+    res.status(500).json({ error: 'Failed to fetch playlists' });
+  }
+});
+
+// Get artist details
+app.get('/api/spotify/artist/:id', async (req, res) => {
+  try {
+    const artist = await spotifyApi.getArtist(req.params.id);
+    const topTrack = await spotifyApi.getArtistTopTracks(req.params.id);
+    res.json({ ...artist, topTrack });
+  } catch (error) {
+    console.error('Error fetching artist:', error);
+    res.status(500).json({ error: 'Failed to fetch artist details' });
+  }
+});
+
+// Analyze playlist
+app.post('/api/spotify/analyze', async (req, res) => {
+  try {
+    const { playlistId, filters } = req.body;
+
+    if (!playlistId) {
+      return res.status(400).json({ error: 'Playlist ID is required' });
+    }
+
+    const results = await spotifyAnalyzer.analyzePlaylist(
+      playlistId,
+      filters || spotifyAnalyzer.DEFAULT_FILTERS
+    );
+
+    res.json(results);
+  } catch (error) {
+    console.error('Error analyzing playlist:', error);
+    res.status(500).json({ error: 'Failed to analyze playlist' });
+  }
+});
+
+// Clean playlist
+app.post('/api/spotify/clean', async (req, res) => {
+  try {
+    const { playlistId, artistsToRemove } = req.body;
+
+    if (!playlistId || !artistsToRemove) {
+      return res.status(400).json({ error: 'Playlist ID and artists to remove are required' });
+    }
+
+    const result = await spotifyAnalyzer.cleanPlaylist(playlistId, artistsToRemove);
+    res.json(result);
+  } catch (error) {
+    console.error('Error cleaning playlist:', error);
+    res.status(500).json({ error: 'Failed to clean playlist' });
+  }
+});
+
+// Quick add artist to CRM from playlist
+app.post('/api/spotify/quick-add', async (req, res) => {
+  try {
+    const { artistId, playlistName } = req.body;
+
+    const artist = await spotifyApi.getArtist(artistId);
+    const topTrack = await spotifyApi.getArtistTopTracks(artistId);
+
+    const bandData = {
+      bandName: artist.name,
+      song: topTrack ? topTrack.name : '',
+      instagram: '',
+      members: '',
+      notes: `Found via Playlist Cleaner: ${playlistName}`,
+      status: 'not_messaged',
+      generatedMessage: '',
+      followUpNotes: '',
+      messageStatus: 'pending'
+    };
+
+    res.json({
+      artist,
+      topTrack,
+      prefillData: bandData
+    });
+  } catch (error) {
+    console.error('Error preparing quick add:', error);
+    res.status(500).json({ error: 'Failed to prepare quick add data' });
+  }
 });
 
 const PORT = process.env.PORT || 3000;

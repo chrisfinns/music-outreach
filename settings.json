@@ -1,0 +1,8 @@
+{
+  "spotify": {
+    "accessToken": null,
+    "refreshToken": null,
+    "expiresAt": null,
+    "connected": false
+  }
+}

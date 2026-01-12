@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
 import SystemPrompt from './pages/SystemPrompt';
+import PlaylistCleaner from './pages/PlaylistCleaner';
 import './App.css';
 
 function App() {
@@ -18,6 +19,12 @@ function App() {
                   Dashboard
                 </Link>
                 <Link
+                  to="/playlist-cleaner"
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-700"
+                >
+                  Playlist Cleaner
+                </Link>
+                <Link
                   to="/system-prompt"
                   className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-500 hover:text-gray-700"
                 >
@@ -31,6 +38,7 @@ function App() {
         <main>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/playlist-cleaner" element={<PlaylistCleaner />} />
             <Route path="/system-prompt" element={<SystemPrompt />} />
           </Routes>
         </main>
