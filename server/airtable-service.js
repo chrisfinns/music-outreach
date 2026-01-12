@@ -10,6 +10,18 @@ const SETTINGS_TABLE = 'Settings'; // We'll create this for system prompt and da
 
 // Helper to convert Airtable record to our app format
 const formatBandRecord = (record) => {
+  const generatedMessage = record.get('Generated Message') || '';
+  const messageStatusField = record.get('Message Status') || ''; // Check if field exists
+
+  // Determine messageStatus: use field if it exists, otherwise infer from Generated Message
+  let messageStatus = 'ready';
+  if (messageStatusField) {
+    messageStatus = messageStatusField.toLowerCase();
+  } else if (!generatedMessage) {
+    // If no generated message exists, it might be generating or pending
+    messageStatus = 'pending';
+  }
+
   return {
     id: record.id,
     bandName: record.get('Artist Name') || '',
@@ -17,10 +29,10 @@ const formatBandRecord = (record) => {
     song: record.get('Song') || '',
     instagram: record.get('Assignee') || '', // Using Assignee field temporarily for Instagram handle
     notes: record.get('Original Notes') || '',
-    generatedMessage: record.get('Generated Message') || '',
+    generatedMessage: generatedMessage,
     followUpNotes: record.get('Follow-up Notes') || '',
     status: record.get('Status') || 'not_messaged',
-    messageStatus: 'ready', // Not stored in Airtable, using default
+    messageStatus: messageStatus,
     dateAdded: record.get('Date Added') || new Date().toISOString(),
     lastUpdated: record.get('Last Updated') || new Date().toISOString(),
   };
@@ -47,28 +59,33 @@ const formatBandForAirtable = (band) => {
   // Add optional fields if they exist
   if (band.members) fields['Members'] = band.members;
   if (band.followUpNotes) fields['Follow-up Notes'] = band.followUpNotes;
+  if (band.messageStatus) fields['Message Status'] = band.messageStatus; // Store messageStatus if field exists
   // Note: "Last Updated" is auto-computed by Airtable, don't set it manually
 
   return fields;
 };
 
 // Map our internal status to Airtable status values
-// Based on Airtable field schema, the Status field likely has these options
 const mapStatusToAirtable = (status) => {
   const statusMap = {
-    'not_messaged': 'Talking To', // Default to "Talking To" since "Not Messaged" doesn't exist
-    'messaged': 'Talking To',
+    'not_messaged': 'Not Messed Yet',
+    'messaged': 'Messaged',
+    'talking': 'Talking To',
     'talking_to': 'Talking To',
-    'won': 'Talking To', // Using existing option until we know all options
-    'closed': 'Talking To'
+    'won': 'Won',
+    'closed': 'Abandoned'
   };
-  return statusMap[status] || 'Talking To';
+  return statusMap[status] || 'Not Messed Yet';
 };
 
 // Map Airtable status to our internal format
 const mapStatusFromAirtable = (status) => {
   const statusMap = {
-    'Talking To': 'talking_to'
+    'Not Messed Yet': 'not_messaged',
+    'Messaged': 'messaged',
+    'Talking To': 'talking',
+    'Won': 'won',
+    'Abandoned': 'closed'
   };
   return statusMap[status] || status.toLowerCase().replace(/ /g, '_');
 };
@@ -126,6 +143,7 @@ class AirtableService {
       if (updates.notes !== undefined) fields['Original Notes'] = updates.notes;
       if (updates.generatedMessage !== undefined) fields['Generated Message'] = updates.generatedMessage;
       if (updates.followUpNotes !== undefined) fields['Follow-up Notes'] = updates.followUpNotes;
+      if (updates.messageStatus !== undefined) fields['Message Status'] = updates.messageStatus;
       if (updates.status !== undefined) fields['Status'] = mapStatusToAirtable(updates.status);
 
       // Note: "Last Updated" is auto-computed by Airtable, don't set it manually

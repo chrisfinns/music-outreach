@@ -2,11 +2,11 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import BandCard from './BandCard';
 
 const columns = [
-  { id: 'not_messaged', title: 'Not Messaged Yet', color: 'bg-gray-100' },
+  { id: 'not_messaged', title: 'Not Messed Yet', color: 'bg-gray-100' },
   { id: 'messaged', title: 'Messaged', color: 'bg-blue-100' },
   { id: 'talking', title: 'Talking To', color: 'bg-yellow-100' },
-  { id: 'closed', title: 'Closed/Not Interested', color: 'bg-red-100' },
   { id: 'won', title: 'Won', color: 'bg-green-100' },
+  { id: 'closed', title: 'Abandoned', color: 'bg-red-100' },
 ];
 
 function KanbanBoard({ bands, onUpdateBand, onDeleteBand, onRegenerateMessage }) {
