@@ -68,7 +68,11 @@ SPOTIFY_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/spotify/callback
 
 ### 4. Spotify OAuth Setup
 
-Spotify requires HTTPS redirect URIs for OAuth callbacks. You have two options:
+Spotify requires HTTPS redirect URIs for OAuth callbacks.
+
+**🚀 Quick Start with Ngrok**: See [QUICK_START.md](QUICK_START.md) for the fastest way to get started!
+
+You have two options:
 
 #### Option A: Deploy to Railway (Recommended for Production Use)
 
@@ -82,50 +86,21 @@ Deploy your app to Railway for a permanent HTTPS URL. See **[RAILWAY_DEPLOYMENT.
 - ✅ $5/month free credit (sufficient for personal use)
 - ✅ No more changing redirect URIs
 
-#### Option B: Local Development with ngrok
+#### Option B: Local Development with Automatic Ngrok
 
 **Best for**: Active development when you need to test Spotify features locally
 
-<details>
-<summary>Click to expand ngrok setup instructions</summary>
+**New!** Ngrok now starts automatically and displays the URL in the app's Settings page!
 
-##### One-time Setup
+1. Get your ngrok authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
+2. Add `NGROK_AUTHTOKEN=your_token` to your `.env` file
+3. Start the server: `npm run dev`
+4. Go to **Settings** page in the app
+5. Copy the Spotify Redirect URI and add it to Spotify Dashboard
 
-1. Install ngrok:
-   ```bash
-   brew install ngrok
-   ```
+See **[NGROK_SETUP.md](NGROK_SETUP.md)** for detailed instructions.
 
-2. Create a free ngrok account at https://ngrok.com and get your auth token
-
-3. Configure ngrok:
-   ```bash
-   ngrok config add-authtoken <your-token>
-   ```
-
-##### Every Development Session
-
-1. **Start ngrok**:
-   ```bash
-   ngrok http 3000
-   ```
-
-2. **Copy the HTTPS URL** (e.g., `https://abc123.ngrok-free.app`)
-
-3. **Update `.env`**:
-   ```env
-   SPOTIFY_REDIRECT_URI=https://your-ngrok-url.ngrok-free.app/api/spotify/callback
-   ```
-
-4. **Update Spotify Dashboard**:
-   - Go to https://developer.spotify.com/dashboard
-   - Add the redirect URI: `https://your-ngrok-url.ngrok-free.app/api/spotify/callback`
-
-5. **Restart your backend server**
-
-**Note**: The ngrok URL changes each session (free tier), requiring updates to both `.env` and Spotify Dashboard.
-
-</details>
+**Note**: The ngrok URL changes each session (free tier), but you only need to update the Spotify Dashboard (not `.env`).
 
 ### 5. Run the Application
 
