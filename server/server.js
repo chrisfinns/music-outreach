@@ -10,6 +10,7 @@ const settingsService = require('./settings-service');
 const spotifyAuth = require('./spotify/auth');
 const spotifyApi = require('./spotify/api');
 const spotifyAnalyzer = require('./spotify/analyzer');
+const ngrokService = require('./ngrok-service');
 
 const app = express();
 app.use(express.json());
@@ -360,6 +361,20 @@ app.post('/api/spotify/quick-add', async (req, res) => {
   }
 });
 
+// ===== NGROK ENDPOINTS =====
+
+// Get ngrok tunnel information
+app.get('/api/ngrok/status', (req, res) => {
+  const connected = ngrokService.isNgrokConnected();
+  const url = ngrokService.getNgrokUrl();
+
+  res.json({
+    connected,
+    url,
+    redirectUri: url ? `${url}/api/spotify/callback` : null
+  });
+});
+
 // Catch-all route to serve React app for client-side routing (must be last)
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
@@ -368,6 +383,11 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on http://localhost:${PORT}`);
+
+  // Start ngrok tunnel in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    await ngrokService.startNgrok(PORT);
+  }
 });
