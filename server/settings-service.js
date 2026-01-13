@@ -15,9 +15,66 @@ class SettingsService {
           refreshToken: null,
           expiresAt: null,
           connected: false
+        },
+        apiKeys: {
+          anthropic: null,
+          airtable: null,
+          spotifyClientId: null,
+          spotifyClientSecret: null,
+          ngrok: null
         }
       };
       fs.writeFileSync(this.settingsPath, JSON.stringify(defaultSettings, null, 2));
+    }
+
+    // Sync API keys from .env if they exist and aren't already in settings
+    this.syncApiKeysFromEnv();
+  }
+
+  syncApiKeysFromEnv() {
+    const settings = this.getSettings();
+
+    // Initialize apiKeys if it doesn't exist
+    if (!settings.apiKeys) {
+      settings.apiKeys = {
+        anthropic: null,
+        airtable: null,
+        spotifyClientId: null,
+        spotifyClientSecret: null,
+        ngrok: null
+      };
+    }
+
+    let updated = false;
+
+    // Sync from .env if key is not already set in settings
+    if (!settings.apiKeys.anthropic && process.env.ANTHROPIC_API_KEY) {
+      settings.apiKeys.anthropic = process.env.ANTHROPIC_API_KEY;
+      updated = true;
+    }
+
+    if (!settings.apiKeys.airtable && process.env.AIRTABLE_ACCESS_TOKEN) {
+      settings.apiKeys.airtable = process.env.AIRTABLE_ACCESS_TOKEN;
+      updated = true;
+    }
+
+    if (!settings.apiKeys.spotifyClientId && process.env.SPOTIFY_CLIENT_ID) {
+      settings.apiKeys.spotifyClientId = process.env.SPOTIFY_CLIENT_ID;
+      updated = true;
+    }
+
+    if (!settings.apiKeys.spotifyClientSecret && process.env.SPOTIFY_CLIENT_SECRET) {
+      settings.apiKeys.spotifyClientSecret = process.env.SPOTIFY_CLIENT_SECRET;
+      updated = true;
+    }
+
+    if (!settings.apiKeys.ngrok && process.env.NGROK_AUTHTOKEN) {
+      settings.apiKeys.ngrok = process.env.NGROK_AUTHTOKEN;
+      updated = true;
+    }
+
+    if (updated) {
+      fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2));
     }
   }
 
@@ -70,6 +127,42 @@ class SettingsService {
       return false;
     }
     return Date.now() < tokens.expiresAt;
+  }
+
+  getApiKeys() {
+    const settings = this.getSettings();
+    return settings.apiKeys || {
+      anthropic: null,
+      airtable: null,
+      spotifyClientId: null,
+      spotifyClientSecret: null,
+      ngrok: null
+    };
+  }
+
+  updateApiKey(keyName, value) {
+    const settings = this.getSettings();
+    if (!settings.apiKeys) {
+      settings.apiKeys = {
+        anthropic: null,
+        airtable: null,
+        spotifyClientId: null,
+        spotifyClientSecret: null,
+        ngrok: null
+      };
+    }
+    settings.apiKeys[keyName] = value;
+    fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2));
+    return settings.apiKeys;
+  }
+
+  deleteApiKey(keyName) {
+    const settings = this.getSettings();
+    if (settings.apiKeys && settings.apiKeys[keyName] !== undefined) {
+      settings.apiKeys[keyName] = null;
+      fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2));
+    }
+    return settings.apiKeys;
   }
 }
 

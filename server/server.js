@@ -375,6 +375,75 @@ app.get('/api/ngrok/status', (req, res) => {
   });
 });
 
+// ===== API KEY MANAGEMENT ENDPOINTS =====
+
+// Get all API keys (masked for security)
+app.get('/api/settings/api-keys', (req, res) => {
+  try {
+    const apiKeys = settingsService.getApiKeys();
+    // Mask the keys for security (only show if they exist)
+    const maskedKeys = {};
+    for (const [key, value] of Object.entries(apiKeys)) {
+      maskedKeys[key] = value ? '••••••••' : null;
+    }
+    res.json(maskedKeys);
+  } catch (error) {
+    console.error('Error fetching API keys:', error);
+    res.status(500).json({ error: 'Failed to fetch API keys' });
+  }
+});
+
+// Update a specific API key
+app.put('/api/settings/api-keys/:keyName', (req, res) => {
+  try {
+    const { keyName } = req.params;
+    const { value } = req.body;
+
+    const validKeys = ['anthropic', 'airtable', 'spotifyClientId', 'spotifyClientSecret', 'ngrok'];
+    if (!validKeys.includes(keyName)) {
+      return res.status(400).json({ error: 'Invalid API key name' });
+    }
+
+    const apiKeys = settingsService.updateApiKey(keyName, value);
+
+    // Mask the keys for security in response
+    const maskedKeys = {};
+    for (const [key, val] of Object.entries(apiKeys)) {
+      maskedKeys[key] = val ? '••••••••' : null;
+    }
+
+    res.json(maskedKeys);
+  } catch (error) {
+    console.error('Error updating API key:', error);
+    res.status(500).json({ error: 'Failed to update API key' });
+  }
+});
+
+// Delete a specific API key
+app.delete('/api/settings/api-keys/:keyName', (req, res) => {
+  try {
+    const { keyName } = req.params;
+
+    const validKeys = ['anthropic', 'airtable', 'spotifyClientId', 'spotifyClientSecret', 'ngrok'];
+    if (!validKeys.includes(keyName)) {
+      return res.status(400).json({ error: 'Invalid API key name' });
+    }
+
+    const apiKeys = settingsService.deleteApiKey(keyName);
+
+    // Mask the keys for security in response
+    const maskedKeys = {};
+    for (const [key, val] of Object.entries(apiKeys)) {
+      maskedKeys[key] = val ? '••••••••' : null;
+    }
+
+    res.json(maskedKeys);
+  } catch (error) {
+    console.error('Error deleting API key:', error);
+    res.status(500).json({ error: 'Failed to delete API key' });
+  }
+});
+
 // Catch-all route to serve React app for client-side routing (must be last)
 if (process.env.NODE_ENV === 'production') {
   app.get('*', (req, res) => {
