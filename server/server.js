@@ -15,6 +15,11 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Serve static files from the React app in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../client/dist')));
+}
+
 let anthropic;
 try {
   if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_api_key_here') {
@@ -354,6 +359,13 @@ app.post('/api/spotify/quick-add', async (req, res) => {
     res.status(500).json({ error: 'Failed to prepare quick add data' });
   }
 });
+
+// Catch-all route to serve React app for client-side routing (must be last)
+if (process.env.NODE_ENV === 'production') {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

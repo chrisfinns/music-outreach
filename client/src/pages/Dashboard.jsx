@@ -3,8 +3,7 @@ import AddBandForm from '../components/AddBandForm';
 import KanbanBoard from '../components/KanbanBoard';
 import DailyCounter from '../components/DailyCounter';
 import SearchBar from '../components/SearchBar';
-
-const API_URL = 'http://localhost:3000/api';
+import API_URL from '../config';
 
 function Dashboard() {
   const [bands, setBands] = useState([]);

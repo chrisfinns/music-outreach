@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import QuickAddModal from '../components/QuickAddModal';
+import API_URL from '../config';
 
 export default function PlaylistCleaner() {
   const [connected, setConnected] = useState(false);
@@ -15,6 +17,8 @@ export default function PlaylistCleaner() {
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [progress, setProgress] = useState(null);
+  const [selectedArtist, setSelectedArtist] = useState(null);
+  const [addedArtists, setAddedArtists] = useState(new Set());
 
   useEffect(() => {
     checkSpotifyStatus();
@@ -22,7 +26,7 @@ export default function PlaylistCleaner() {
 
   async function checkSpotifyStatus() {
     try {
-      const response = await fetch('http://localhost:3000/api/spotify/status');
+      const response = await fetch(`${API_URL}/spotify/status`);
       const data = await response.json();
       setConnected(data.connected);
 
@@ -36,7 +40,7 @@ export default function PlaylistCleaner() {
 
   async function handleConnect() {
     try {
-      const response = await fetch('http://localhost:3000/api/spotify/auth');
+      const response = await fetch(`${API_URL}/spotify/auth`);
       const data = await response.json();
 
       const authWindow = window.open(data.authURL, 'Spotify Auth', 'width=600,height=800');
@@ -55,7 +59,7 @@ export default function PlaylistCleaner() {
 
   async function loadPlaylists() {
     try {
-      const response = await fetch('http://localhost:3000/api/spotify/playlists');
+      const response = await fetch(`${API_URL}/spotify/playlists`);
       const data = await response.json();
       setPlaylists(data);
     } catch (error) {
@@ -75,7 +79,7 @@ export default function PlaylistCleaner() {
     setProgress(null);
 
     try {
-      const response = await fetch('http://localhost:3000/api/spotify/analyze', {
+      const response = await fetch(`${API_URL}/spotify/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -126,7 +130,7 @@ export default function PlaylistCleaner() {
     setCleaning(true);
 
     try {
-      const response = await fetch('http://localhost:3000/api/spotify/clean', {
+      const response = await fetch(`${API_URL}/spotify/clean`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -148,6 +152,64 @@ export default function PlaylistCleaner() {
       alert('Failed to clean playlist');
     } finally {
       setCleaning(false);
+    }
+  }
+
+  async function handleQuickAdd(artistId, formData) {
+    try {
+      // Create band in Airtable
+      const createResponse = await fetch(`${API_URL}/bands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bandName: formData.bandName,
+          song: formData.song,
+          instagram: formData.instagram,
+          members: formData.members,
+          notes: formData.notes,
+          status: 'not_messaged'
+        })
+      });
+
+      if (!createResponse.ok) {
+        throw new Error('Failed to create band in CRM');
+      }
+
+      const bandData = await createResponse.json();
+
+      // Generate message for the band
+      const messageResponse = await fetch(`${API_URL}/generate-message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bandName: formData.bandName,
+          members: formData.members,
+          song: formData.song,
+          notes: formData.notes
+        })
+      });
+
+      if (messageResponse.ok) {
+        const messageData = await messageResponse.json();
+
+        // Update band with generated message
+        await fetch(`${API_URL}/bands/${bandData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...bandData,
+            generatedMessage: messageData.message
+          })
+        });
+      }
+
+      // Mark artist as added
+      setAddedArtists(prev => new Set(prev).add(artistId));
+
+      alert(`Successfully added ${formData.bandName} to CRM!`);
+    } catch (error) {
+      console.error('Error adding artist to CRM:', error);
+      throw error;
     }
   }
 
@@ -337,18 +399,24 @@ export default function PlaylistCleaner() {
               {results.kept.length > 0 && (
                 <div className="mb-6">
                   <h3 className="font-semibold text-lg mb-2 text-green-600">
-                    Artists Kept ({results.kept.length})
+                    Artists Kept ({results.kept.filter(a => !addedArtists.has(a.id)).length})
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {results.kept.map(artist => (
+                    {results.kept.filter(artist => !addedArtists.has(artist.id)).map(artist => (
                       <div key={artist.id} className="border border-green-200 rounded-lg p-4 bg-green-50">
-                        <p className="font-medium">{artist.name}</p>
+                        <p className="font-medium mb-2">{artist.name}</p>
                         <p className="text-sm text-gray-600">
                           Popularity: {artist.spotifyData?.popularity}
                         </p>
-                        <p className="text-sm text-gray-600">
+                        <p className="text-sm text-gray-600 mb-3">
                           {artist.instagramCheck?.instagram?.handle || 'No Instagram'}
                         </p>
+                        <button
+                          onClick={() => setSelectedArtist(artist)}
+                          className="w-full px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-semibold"
+                        >
+                          Quick Add to CRM
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -395,6 +463,15 @@ export default function PlaylistCleaner() {
             </div>
           )}
         </>
+      )}
+
+      {/* Quick Add Modal */}
+      {selectedArtist && (
+        <QuickAddModal
+          artist={selectedArtist}
+          onClose={() => setSelectedArtist(null)}
+          onAdd={handleQuickAdd}
+        />
       )}
     </div>
   );

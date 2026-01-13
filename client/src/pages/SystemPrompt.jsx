@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:3000/api';
+import API_URL from '../config';
 
 function SystemPrompt() {
   const [prompt, setPrompt] = useState('');
