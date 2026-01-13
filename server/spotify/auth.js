@@ -1,5 +1,6 @@
 const SpotifyWebApi = require('spotify-web-api-node');
 const settingsService = require('../settings-service');
+const ngrokService = require('../ngrok-service');
 
 const spotifyApi = new SpotifyWebApi({
   clientId: process.env.SPOTIFY_CLIENT_ID,
@@ -16,12 +17,24 @@ const scopes = [
 ];
 
 function getAuthURL() {
+  // Use ngrok URL if available, otherwise fall back to env
+  const ngrokUrl = ngrokService.getNgrokUrl();
+  if (ngrokUrl) {
+    spotifyApi.setRedirectURI(`${ngrokUrl}/api/spotify/callback`);
+  }
+
   const state = Math.random().toString(36).substring(7);
   return spotifyApi.createAuthorizeURL(scopes, state);
 }
 
 async function handleCallback(code) {
   try {
+    // Ensure we're using the correct redirect URI for the callback
+    const ngrokUrl = ngrokService.getNgrokUrl();
+    if (ngrokUrl) {
+      spotifyApi.setRedirectURI(`${ngrokUrl}/api/spotify/callback`);
+    }
+
     const data = await spotifyApi.authorizationCodeGrant(code);
 
     const tokens = {

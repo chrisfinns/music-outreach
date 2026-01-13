@@ -1,0 +1,7 @@
+{
+  "watch": ["server/**/*.js"],
+  "ignore": ["node_modules", "client", "*.log"],
+  "env": {
+    "NODE_ENV": "development"
+  }
+}
