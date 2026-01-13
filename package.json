@@ -23,12 +23,12 @@
   "homepage": "https://github.com/chrisfinns/music-outreach#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@ngrok/ngrok": "^1.7.0",
     "airtable": "^0.12.2",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "ngrok": "^5.0.0-beta.2",
     "playwright": "^1.57.0",
     "spotify-web-api-node": "^5.0.2"
   },

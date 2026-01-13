@@ -1,5 +1,6 @@
-const ngrok = require('ngrok');
+const ngrok = require('@ngrok/ngrok');
 
+let listener = null;
 let ngrokUrl = null;
 let ngrokConnected = false;
 
@@ -8,7 +9,7 @@ async function startNgrok(port) {
     // Check if ngrok is configured
     const authtoken = process.env.NGROK_AUTHTOKEN;
 
-    if (!authtoken) {
+    if (!authtoken || authtoken === 'your_ngrok_authtoken_here') {
       console.log('⚠️  NGROK_AUTHTOKEN not found in .env');
       console.log('   Add your ngrok authtoken to .env to use ngrok features');
       return null;
@@ -16,11 +17,13 @@ async function startNgrok(port) {
 
     console.log('🚇 Starting ngrok tunnel...');
 
-    ngrokUrl = await ngrok.connect({
+    // Create ngrok listener
+    listener = await ngrok.forward({
       addr: port,
       authtoken: authtoken
     });
 
+    ngrokUrl = listener.url();
     ngrokConnected = true;
 
     console.log('✅ Ngrok tunnel established!');
@@ -40,9 +43,9 @@ async function startNgrok(port) {
 
 async function stopNgrok() {
   try {
-    if (ngrokConnected) {
-      await ngrok.disconnect();
-      await ngrok.kill();
+    if (listener) {
+      await listener.close();
+      listener = null;
       ngrokConnected = false;
       ngrokUrl = null;
       console.log('🛑 Ngrok tunnel closed');
