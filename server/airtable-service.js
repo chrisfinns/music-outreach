@@ -27,7 +27,7 @@ const formatBandRecord = (record) => {
     bandName: record.get('Artist Name') || '',
     members: record.get('Members') || '',
     song: record.get('Song') || '',
-    instagram: record.get('Assignee') || '', // Using Assignee field temporarily for Instagram handle
+    instagram: record.get('IG') || '',
     notes: record.get('Original Notes') || '',
     generatedMessage: generatedMessage,
     followUpNotes: record.get('Follow-up Notes') || '',
@@ -43,7 +43,7 @@ const formatBandForAirtable = (band) => {
   const fields = {
     'Artist Name': band.bandName,
     'Song': band.song || '',
-    'Assignee': band.instagram || '', // Using Assignee field temporarily for Instagram handle
+    'IG': band.instagram || '',
     'Original Notes': band.notes || '',
     // Status: skip for now, let Airtable use default or we'll set it manually
     'Generated Message': band.generatedMessage || '',
@@ -140,7 +140,7 @@ class AirtableService {
       if (updates.bandName !== undefined) fields['Artist Name'] = updates.bandName;
       if (updates.members !== undefined) fields['Members'] = updates.members;
       if (updates.song !== undefined) fields['Song'] = updates.song;
-      if (updates.instagram !== undefined) fields['Assignee'] = updates.instagram; // Using Assignee for Instagram
+      if (updates.instagram !== undefined) fields['IG'] = updates.instagram;
       if (updates.notes !== undefined) fields['Original Notes'] = updates.notes;
       if (updates.generatedMessage !== undefined) fields['Generated Message'] = updates.generatedMessage;
       if (updates.followUpNotes !== undefined) fields['Follow-up Notes'] = updates.followUpNotes;

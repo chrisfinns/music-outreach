@@ -153,6 +153,45 @@ async function getArtistTopTracks(artistId) {
   }
 }
 
+async function getTrack(trackId) {
+  try {
+    const spotifyApi = await ensureValidToken();
+    const data = await spotifyApi.getTrack(trackId);
+
+    // Get album credits which may include band members
+    const albumData = await spotifyApi.getAlbum(data.body.album.id);
+
+    // Extract unique artist names from all tracks on the album for credits
+    const credits = new Set();
+    if (albumData.body.tracks && albumData.body.tracks.items) {
+      albumData.body.tracks.items.forEach(track => {
+        track.artists.forEach(artist => {
+          credits.add(artist.name);
+        });
+      });
+    }
+
+    return {
+      id: data.body.id,
+      name: data.body.name,
+      uri: data.body.uri,
+      popularity: data.body.popularity,
+      previewUrl: data.body.preview_url,
+      artists: data.body.artists.map(artist => artist.name),
+      credits: Array.from(credits),
+      album: {
+        name: data.body.album.name,
+        image: data.body.album.images && data.body.album.images.length > 0
+          ? data.body.album.images[0].url
+          : null
+      }
+    };
+  } catch (error) {
+    console.error('Error fetching track:', error);
+    return null;
+  }
+}
+
 async function removeTracksFromPlaylist(playlistId, trackUris) {
   try {
     const spotifyApi = await ensureValidToken();
@@ -178,5 +217,6 @@ module.exports = {
   getArtist,
   getArtistAlbums,
   getArtistTopTracks,
+  getTrack,
   removeTracksFromPlaylist
 };

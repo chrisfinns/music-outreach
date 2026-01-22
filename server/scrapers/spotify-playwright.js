@@ -36,6 +36,8 @@ async function initBrowser() {
         '--disable-blink-features=AutomationControlled',
         '--disable-dev-shm-usage',
         '--no-sandbox',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-web-security',
       ]
     });
 
@@ -262,8 +264,301 @@ async function scrapeInstagramHandlesWithDelay(artistIds, onProgress) {
   return results;
 }
 
+/**
+ * Scrape track credits (band members) from Spotify track page
+ * Credits are on the TRACK page, not the artist page!
+ *
+ * @param {string} trackId - Spotify track ID
+ * @param {string} sessionCookie - Optional Spotify session cookie (sp_dc) for enhanced access
+ * @returns {Object} { found: boolean, credits: string[], error: string }
+ */
+async function scrapeTrackCredits(trackId, sessionCookie = null) {
+  let page = null;
+  let localBrowser = null;
+  let localContext = null;
+
+  try {
+    // For credits, ALWAYS create a fresh browser instance
+    // This ensures proper cookie handling and page loading
+    // NOTE: Must use minimal launch args - Spotify blocks browsers with
+    // certain flags (like --disable-blink-features) with DRM error
+    localBrowser = await chromium.launch({
+      headless: true
+    });
+
+    if (sessionCookie) {
+      // Create a new context with the cookie pre-configured
+      localContext = await localBrowser.newContext({
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        viewport: { width: 1280, height: 720 },
+        locale: 'en-US',
+        timezoneId: 'America/New_York',
+      });
+
+      await localContext.addCookies([{
+        name: 'sp_dc',
+        value: sessionCookie,
+        domain: '.spotify.com',
+        path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'Lax'
+      }]);
+
+      page = await localContext.newPage();
+      console.log('Using session cookie for enhanced credits access');
+    } else {
+      localContext = await localBrowser.newContext();
+      page = await localContext.newPage();
+    }
+
+    const trackPageUrl = `https://open.spotify.com/track/${trackId}`;
+
+    // Navigate to track page
+    await page.goto(trackPageUrl, {
+      waitUntil: 'networkidle',
+      timeout: TIMEOUTS.pageLoad,
+    });
+
+    // Wait a moment for initial render
+    await page.waitForTimeout(3000);
+
+    // Scroll to ensure content is loaded
+    await page.evaluate(() => {
+      window.scrollTo(0, 300);
+    });
+    await page.waitForTimeout(500);
+
+    // Try to dismiss cookie banner if present
+    try {
+      const cookieButton = await trySelectors(
+        page,
+        SELECTORS.cookieBanner,
+        2000
+      );
+      if (cookieButton) {
+        await cookieButton.click();
+        await page.waitForTimeout(500);
+      }
+    } catch (e) {
+      // Cookie banner not present, continue
+    }
+
+    // Look for the 3-dot menu button next to play button
+    // IMPORTANT: Credits are in a dropdown menu that requires login
+    // The button contains an SVG with 3 circles and has aria-label like "More options for {Track Name}"
+    let menuButton = null;
+
+    // Wait for the page to have the track content loaded
+    await page.waitForSelector('button', { timeout: 5000 });
+    await page.waitForTimeout(2000);
+
+    // Try to find the button containing the 3-dot SVG icon
+    // The SVG has 3 circle elements with specific positioning
+    const svgSelector = 'svg path[d*="4.5 13.5a1.5 1.5"]';
+    try {
+      const svgElement = await page.waitForSelector(svgSelector, { timeout: 5000 });
+      if (svgElement) {
+        // Get the button that contains this SVG
+        menuButton = await svgElement.evaluateHandle(svg => {
+          let el = svg;
+          while (el && el.tagName !== 'BUTTON') {
+            el = el.parentElement;
+          }
+          return el;
+        });
+        console.log('Found menu button via SVG icon');
+      }
+    } catch (e) {
+      console.log('SVG selector failed, trying aria-label fallback');
+
+      // Fallback: search by aria-label
+      const allButtons = await page.$$('button');
+      console.log(`Found ${allButtons.length} total buttons on page`);
+
+      for (const btn of allButtons) {
+        try {
+          const ariaLabel = await btn.getAttribute('aria-label');
+          if (ariaLabel && ariaLabel.includes('More options for')) {
+            menuButton = btn;
+            console.log(`Found menu button with aria-label: "${ariaLabel}"`);
+            break;
+          }
+        } catch (e) {
+          // Button might have been removed from DOM, continue
+        }
+      }
+    }
+
+    if (!menuButton) {
+      const errorMsg = sessionCookie
+        ? 'no_menu_button_with_session'
+        : 'requires_login';
+
+      console.log(`No menu button found for track ${trackId}. ${sessionCookie ? 'Session cookie may be invalid.' : 'Login required - add session cookie in Settings.'}`);
+
+      return {
+        found: false,
+        credits: [],
+        error: errorMsg,
+        details: sessionCookie
+          ? 'Menu button not found. Your session cookie may have expired.'
+          : 'Credits require login. Add your Spotify session cookie in Settings for full access.'
+      };
+    }
+
+    // Click the 3-dot menu button to open dropdown
+    await menuButton.click({ force: true });
+    await page.waitForTimeout(500);
+
+    // Now look for "View credits" in the dropdown menu
+    let creditsMenuItem = null;
+    const creditsMenuSelectors = [
+      'button:has-text("View credits")',
+      '[role="menuitem"]:has-text("View credits")',
+      'li:has-text("View credits")',
+      'a:has-text("View credits")'
+    ];
+
+    for (const selector of creditsMenuSelectors) {
+      try {
+        creditsMenuItem = await page.waitForSelector(selector, { timeout: 2000 });
+        if (creditsMenuItem) {
+          console.log(`Found "View credits" menu item with selector: ${selector}`);
+          break;
+        }
+      } catch (e) {
+        // Try next selector
+      }
+    }
+
+    if (!creditsMenuItem) {
+      console.log(`No "View credits" option found in menu for track ${trackId}`);
+      return {
+        found: false,
+        credits: [],
+        error: 'no_credits_menu_item',
+        details: 'Menu opened but no "View credits" option found.'
+      };
+    }
+
+    // Click the "View credits" menu item to open credits view
+    await creditsMenuItem.click({ force: true });
+
+    // Wait for credits content to load
+    await page.waitForTimeout(4000);
+
+    // Extract credits - they appear in a container, not necessarily a [role="dialog"] modal
+    const credits = [];
+
+    try {
+      // Wait for credits-specific content to appear
+      // Look for "Performed by" text which indicates credits are loaded
+      await page.waitForSelector('text=Performed by', { timeout: 5000 });
+      console.log('Credits content loaded');
+
+      // Find the "Performed by" element and get its parent container
+      const performedByEl = await page.$('text=Performed by');
+      if (!performedByEl) {
+        throw new Error('Could not find Performed by element');
+      }
+
+      // Get a parent container that has the full credits
+      // We need to go up a few levels to get the full container
+      const creditsContainer = await performedByEl.evaluateHandle(el => {
+        let parent = el;
+        // Go up until we find a container with reasonable size (credits should be 100-500 chars)
+        for (let i = 0; i < 5; i++) {
+          parent = parent.parentElement;
+          if (parent && parent.textContent.length > 80 && parent.textContent.length < 600) {
+            return parent;
+          }
+        }
+        return parent; // Return whatever we have
+      });
+
+      // Get all text content from the credits container
+      const modalContent = await creditsContainer.textContent();
+
+      if (modalContent) {
+        // Credits are formatted like: "Mr. BrightsidePerformed byThe KillersWritten byBrandon FlowersDave Keuning..."
+        // We need to split by the role labels and extract names
+
+        // Extract performers
+        const performedMatch = modalContent.match(/Performed by(.+?)(?:Written by|Produced by|Source|$)/);
+        if (performedMatch) {
+          const performers = performedMatch[1].trim();
+          if (performers) {
+            credits.push(`Performed by: ${performers}`);
+          }
+        }
+
+        // Extract writers
+        const writtenMatch = modalContent.match(/Written by(.+?)(?:Produced by|Source|$)/);
+        if (writtenMatch) {
+          const writersText = writtenMatch[1].trim();
+          if (writersText) {
+            credits.push(`Written by: ${writersText}`);
+          }
+        }
+
+        // Extract producers
+        const producedMatch = modalContent.match(/Produced by(.+?)(?:Source|$)/);
+        if (producedMatch) {
+          const producers = producedMatch[1].trim();
+          if (producers) {
+            credits.push(`Produced by: ${producers}`);
+          }
+        }
+
+        // Extract source
+        const sourceMatch = modalContent.match(/Source:\s*(.+?)$/);
+        if (sourceMatch) {
+          const source = sourceMatch[1].trim();
+          if (source) {
+            credits.push(`Source: ${source}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Error extracting credits for track ${trackId}:`, e.message);
+    }
+
+    // Close the local browser
+    if (localBrowser) {
+      await localBrowser.close();
+    }
+
+    return {
+      found: credits.length > 0,
+      credits: credits.filter((credit, index) => credits.indexOf(credit) === index).slice(0, 10), // Remove duplicates and limit to 10
+      error: null
+    };
+
+  } catch (error) {
+    console.error(`Error scraping credits for track ${trackId}:`, error.message);
+
+    // Close the local browser
+    if (localBrowser) {
+      try {
+        await localBrowser.close();
+      } catch (e) {
+        // Ignore close errors
+      }
+    }
+
+    return {
+      found: false,
+      credits: [],
+      error: 'exception',
+      details: error.message,
+    };
+  }
+}
+
 module.exports = {
   scrapeInstagramHandle,
   scrapeInstagramHandlesWithDelay,
+  scrapeTrackCredits,
   closeBrowser,
 };

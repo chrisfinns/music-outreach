@@ -1,14 +1,40 @@
 import { useState, useEffect } from 'react';
+import API_URL from '../config';
 
 export default function QuickAddModal({ artist, onClose, onAdd }) {
   const [formData, setFormData] = useState({
     bandName: artist.name,
-    song: '',
+    song: artist.tracks?.[0]?.name || '',
     instagram: artist.instagramCheck?.instagram?.handle || '',
     members: '',
-    notes: `Found via Playlist Cleaner`
+    notes: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showTopTracks, setShowTopTracks] = useState(false);
+  const [credits, setCredits] = useState(null);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+
+  // Fetch track credits when modal opens
+  useEffect(() => {
+    async function fetchCredits() {
+      if (!artist.tracks?.[0]?.id) return;
+
+      setLoadingCredits(true);
+      try {
+        const response = await fetch(`${API_URL}/spotify/track/${artist.tracks[0].id}/credits`);
+        const data = await response.json();
+
+        if (data.found && data.credits && data.credits.length > 0) {
+          setCredits(data.credits);
+        }
+      } catch (error) {
+        console.error('Error fetching credits:', error);
+      } finally {
+        setLoadingCredits(false);
+      }
+    }
+    fetchCredits();
+  }, [artist]);
 
   // Handle ESC key to close modal
   useEffect(() => {
@@ -39,10 +65,20 @@ export default function QuickAddModal({ artist, onClose, onAdd }) {
     setIsSubmitting(true);
 
     try {
-      // Auto-prepend @ to Instagram if it doesn't have one
+      // Convert Instagram handle to full URL for Airtable
+      let instagramUrl = formData.instagram.trim();
+
+      // Remove @ if present
+      instagramUrl = instagramUrl.replace(/^@/, '');
+
+      // If not already a URL, convert to URL
+      if (!instagramUrl.includes('instagram.com')) {
+        instagramUrl = `https://instagram.com/${instagramUrl}`;
+      }
+
       const submissionData = {
         ...formData,
-        instagram: formData.instagram.startsWith('@') ? formData.instagram : `@${formData.instagram}`
+        instagram: instagramUrl
       };
 
       await onAdd(artist.id, submissionData);
@@ -86,9 +122,20 @@ export default function QuickAddModal({ artist, onClose, onAdd }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Left Column: Spotify Player */}
             <div>
-              <h4 className="font-semibold text-gray-900 mb-3">Spotify Preview</h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-gray-900">Spotify Preview</h4>
+                <button
+                  onClick={() => setShowTopTracks(!showTopTracks)}
+                  className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 font-semibold"
+                >
+                  {showTopTracks ? 'Show Playlist Track' : 'Show Top Tracks'}
+                </button>
+              </div>
               <iframe
-                src={`https://open.spotify.com/embed/artist/${artist.id}?utm_source=generator`}
+                src={showTopTracks
+                  ? `https://open.spotify.com/embed/artist/${artist.id}?utm_source=generator`
+                  : `https://open.spotify.com/embed/track/${artist.tracks?.[0]?.id}?utm_source=generator`
+                }
                 width="100%"
                 height="380"
                 frameBorder="0"
@@ -101,18 +148,77 @@ export default function QuickAddModal({ artist, onClose, onAdd }) {
                 onClick={handleOpenSpotify}
                 className="mt-3 w-full text-sm px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700"
               >
-                Open in Spotify (Check Members)
+                Open in Spotify
               </button>
 
               {/* Artist Info */}
-              <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  <span className="font-semibold">Popularity:</span> {artist.spotifyData?.popularity}
-                </p>
+              <div className="mt-4 p-3 bg-gray-50 rounded-lg space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-semibold">Popularity:</span> {artist.spotifyData?.popularity}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">
+                      <span className="font-semibold">Monthly Listeners:</span> {artist.spotifyData?.followers?.toLocaleString() || 'N/A'}
+                    </p>
+                  </div>
+                </div>
                 {artist.releaseCheck?.latestRelease && (
                   <p className="text-sm text-gray-600">
                     <span className="font-semibold">Latest Release:</span> {artist.releaseCheck.latestRelease.year}
                   </p>
+                )}
+
+                {/* Track Credits */}
+                <div className="pt-2 border-t border-gray-200">
+                  {loadingCredits && (
+                    <p className="text-sm text-gray-500 italic">
+                      Loading credits...
+                    </p>
+                  )}
+                  {!loadingCredits && credits && credits.length > 0 && (
+                    <>
+                      <p className="text-sm text-gray-600">
+                        <span className="font-semibold">Credits:</span>
+                      </p>
+                      <div className="text-xs text-gray-600 mt-1 space-y-0.5">
+                        {credits.map((credit, index) => (
+                          <p key={index}>{credit}</p>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {!loadingCredits && !credits && (
+                    <div className="bg-blue-50 border border-blue-200 rounded p-2">
+                      <p className="text-xs text-blue-800">
+                        <span className="font-semibold">Credits unavailable</span> - Spotify requires login to view track credits.
+                      </p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Add your session cookie in <a href="/settings" className="underline font-semibold">Settings</a> to enable automatic credits display.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {artist.instagramCheck?.instagram?.url && (
+                  <div className="pt-2 border-t border-gray-200">
+                    <a
+                      href={artist.instagramCheck.instagram.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1"
+                    >
+                      Instagram: {artist.instagramCheck.instagram.handle}
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Check their recent posts to gauge activity and engagement
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -143,7 +249,7 @@ export default function QuickAddModal({ artist, onClose, onAdd }) {
                     value={formData.song}
                     onChange={(e) => setFormData({ ...formData, song: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Enter a song title or listen in Spotify player"
+                    placeholder="Song from playlist or choose from Spotify player"
                     required
                   />
                 </div>
@@ -171,8 +277,11 @@ export default function QuickAddModal({ artist, onClose, onAdd }) {
                     value={formData.members}
                     onChange={(e) => setFormData({ ...formData, members: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Check Spotify page and enter member names"
+                    placeholder="Enter member names (check credits above or Spotify page)"
                   />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tip: Check the Credits section above for composer/performer info
+                  </p>
                 </div>
 
                 <div>

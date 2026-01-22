@@ -21,15 +21,15 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, '../client/dist')));
 }
 
-let anthropic;
-try {
-  if (process.env.ANTHROPIC_API_KEY && process.env.ANTHROPIC_API_KEY !== 'your_api_key_here') {
-    anthropic = new Anthropic({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+// Initialize Anthropic client dynamically from settings
+function getAnthropicClient() {
+  const apiKeys = settingsService.getApiKeys();
+  const apiKey = apiKeys.anthropic || process.env.ANTHROPIC_API_KEY;
+
+  if (apiKey && apiKey !== 'your_api_key_here') {
+    return new Anthropic({ apiKey });
   }
-} catch (error) {
-  console.warn('Anthropic API not initialized. Add your API key to .env file.');
+  return null;
 }
 
 // Keep JSON file as backup/fallback for settings (system prompt, daily count)
@@ -66,16 +66,20 @@ const saveSettings = (settings) => {
 // Endpoint to generate outreach message
 app.post('/api/generate-message', async (req, res) => {
   try {
-    const { bandName, members, song, notes, systemPrompt } = req.body;
+    const { bandName, members, song, notes } = req.body;
 
+    const anthropic = getAnthropicClient();
     if (!anthropic) {
-      return res.status(500).json({ error: 'Anthropic API not configured. Please add your API key to the .env file.' });
+      return res.status(500).json({ error: 'Anthropic API not configured. Please add your API key in Settings.' });
     }
 
-    const message = await anthropic.messages.create({
+    // Get system prompt from settings (not from request body)
+    const settings = getSettings();
+
+    // Build message options
+    const messageOptions = {
       model: "claude-sonnet-4-20250514",
       max_tokens: 1024,
-      system: systemPrompt,
       messages: [
         {
           role: "user",
@@ -89,7 +93,15 @@ My Notes: ${notes}
 Please create a personalized, engaging outreach message.`
         }
       ],
-    });
+    };
+
+    // Only add system prompt if it exists and is not empty
+    // This allows using custom system prompts in the Anthropic console instead
+    if (settings.systemPrompt && settings.systemPrompt.trim()) {
+      messageOptions.system = settings.systemPrompt;
+    }
+
+    const message = await anthropic.messages.create(messageOptions);
 
     const generatedMessage = message.content[0].text;
     res.json({ message: generatedMessage });
@@ -283,6 +295,30 @@ app.get('/api/spotify/artist/:id', async (req, res) => {
   }
 });
 
+// Get track details with credits
+app.get('/api/spotify/track/:id', async (req, res) => {
+  try {
+    const track = await spotifyApi.getTrack(req.params.id);
+    res.json(track);
+  } catch (error) {
+    console.error('Error fetching track:', error);
+    res.status(500).json({ error: 'Failed to fetch track details' });
+  }
+});
+
+// Scrape track credits from Spotify track page
+app.get('/api/spotify/track/:id/credits', async (req, res) => {
+  try {
+    const { scrapeTrackCredits } = require('./scrapers/spotify-playwright');
+    const sessionCookie = settingsService.getSpotifySessionCookie();
+    const credits = await scrapeTrackCredits(req.params.id, sessionCookie);
+    res.json(credits);
+  } catch (error) {
+    console.error('Error fetching track credits:', error);
+    res.status(500).json({ error: 'Failed to fetch track credits' });
+  }
+});
+
 // Analyze playlist with Server-Sent Events for progress
 app.post('/api/spotify/analyze', async (req, res) => {
   try {
@@ -373,6 +409,42 @@ app.get('/api/ngrok/status', (req, res) => {
     url,
     redirectUri: url ? `${url}/api/spotify/callback` : null
   });
+});
+
+// ===== SPOTIFY SESSION COOKIE ENDPOINTS =====
+
+// Get Spotify session cookie status
+app.get('/api/settings/spotify-session', (req, res) => {
+  try {
+    const cookie = settingsService.getSpotifySessionCookie();
+    res.json({ configured: !!cookie });
+  } catch (error) {
+    console.error('Error fetching Spotify session cookie:', error);
+    res.status(500).json({ error: 'Failed to fetch session cookie status' });
+  }
+});
+
+// Save Spotify session cookie
+app.post('/api/settings/spotify-session', (req, res) => {
+  try {
+    const { cookie } = req.body;
+    settingsService.saveSpotifySessionCookie(cookie);
+    res.json({ success: true, configured: !!cookie });
+  } catch (error) {
+    console.error('Error saving Spotify session cookie:', error);
+    res.status(500).json({ error: 'Failed to save session cookie' });
+  }
+});
+
+// Clear Spotify session cookie
+app.delete('/api/settings/spotify-session', (req, res) => {
+  try {
+    settingsService.clearSpotifySessionCookie();
+    res.json({ success: true, configured: false });
+  } catch (error) {
+    console.error('Error clearing Spotify session cookie:', error);
+    res.status(500).json({ error: 'Failed to clear session cookie' });
+  }
 });
 
 // ===== API KEY MANAGEMENT ENDPOINTS =====

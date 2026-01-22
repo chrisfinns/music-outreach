@@ -14,7 +14,8 @@ class SettingsService {
           accessToken: null,
           refreshToken: null,
           expiresAt: null,
-          connected: false
+          connected: false,
+          sessionCookie: null
         },
         apiKeys: {
           anthropic: null,
@@ -163,6 +164,38 @@ class SettingsService {
       fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2));
     }
     return settings.apiKeys;
+  }
+
+  getSpotifySessionCookie() {
+    const settings = this.getSettings();
+    if (!settings.spotify) {
+      return null;
+    }
+    return settings.spotify.sessionCookie;
+  }
+
+  saveSpotifySessionCookie(cookie) {
+    const settings = this.getSettings();
+    if (!settings.spotify) {
+      settings.spotify = {
+        accessToken: null,
+        refreshToken: null,
+        expiresAt: null,
+        connected: false,
+        sessionCookie: null
+      };
+    }
+    settings.spotify.sessionCookie = cookie;
+    fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2));
+    return cookie;
+  }
+
+  clearSpotifySessionCookie() {
+    const settings = this.getSettings();
+    if (settings.spotify) {
+      settings.spotify.sessionCookie = null;
+      fs.writeFileSync(this.settingsPath, JSON.stringify(settings, null, 2));
+    }
   }
 }
 

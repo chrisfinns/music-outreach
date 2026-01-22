@@ -3,11 +3,15 @@ import API_URL from '../config';
 
 export default function Settings() {
   const [ngrokStatus, setNgrokStatus] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
+  const [copiedRedirect, setCopiedRedirect] = useState(false);
   const [apiKeys, setApiKeys] = useState({});
   const [editingKey, setEditingKey] = useState(null);
   const [keyValue, setKeyValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [spotifySession, setSpotifySession] = useState({ configured: false });
+  const [editingSession, setEditingSession] = useState(false);
+  const [sessionCookie, setSessionCookie] = useState('');
 
   const API_KEY_LABELS = {
     anthropic: 'Anthropic API Key',
@@ -20,6 +24,7 @@ export default function Settings() {
   useEffect(() => {
     checkNgrokStatus();
     fetchApiKeys();
+    fetchSpotifySession();
     // Poll for ngrok status every 5 seconds
     const interval = setInterval(checkNgrokStatus, 5000);
     return () => clearInterval(interval);
@@ -42,6 +47,52 @@ export default function Settings() {
       setApiKeys(data);
     } catch (error) {
       console.error('Error fetching API keys:', error);
+    }
+  }
+
+  async function fetchSpotifySession() {
+    try {
+      const response = await fetch(`${API_URL}/settings/spotify-session`);
+      const data = await response.json();
+      setSpotifySession(data);
+    } catch (error) {
+      console.error('Error fetching Spotify session:', error);
+    }
+  }
+
+  async function saveSpotifySession() {
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_URL}/settings/spotify-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie: sessionCookie })
+      });
+      const data = await response.json();
+      setSpotifySession(data);
+      setEditingSession(false);
+      setSessionCookie('');
+    } catch (error) {
+      console.error('Error saving Spotify session:', error);
+      alert('Failed to save session cookie');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteSpotifySession() {
+    if (!confirm('Are you sure you want to delete the Spotify session cookie?')) {
+      return;
+    }
+    try {
+      const response = await fetch(`${API_URL}/settings/spotify-session`, {
+        method: 'DELETE'
+      });
+      const data = await response.json();
+      setSpotifySession(data);
+    } catch (error) {
+      console.error('Error deleting Spotify session:', error);
+      alert('Failed to delete session cookie');
     }
   }
 
@@ -91,10 +142,15 @@ export default function Settings() {
     setKeyValue('');
   }
 
-  function copyToClipboard(text) {
+  function copyToClipboard(text, type) {
     navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (type === 'url') {
+      setCopiedUrl(true);
+      setTimeout(() => setCopiedUrl(false), 2000);
+    } else if (type === 'redirect') {
+      setCopiedRedirect(true);
+      setTimeout(() => setCopiedRedirect(false), 2000);
+    }
   }
 
   return (
@@ -125,10 +181,10 @@ export default function Settings() {
                   {ngrokStatus.url}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(ngrokStatus.url)}
+                  onClick={() => copyToClipboard(ngrokStatus.url, 'url')}
                   className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition text-sm font-medium"
                 >
-                  {copied ? 'Copied!' : 'Copy'}
+                  {copiedUrl ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
@@ -142,10 +198,10 @@ export default function Settings() {
                   {ngrokStatus.redirectUri}
                 </code>
                 <button
-                  onClick={() => copyToClipboard(ngrokStatus.redirectUri)}
+                  onClick={() => copyToClipboard(ngrokStatus.redirectUri, 'redirect')}
                   className="px-4 py-2 bg-yellow-600 text-white rounded hover:bg-yellow-700 transition text-sm font-medium whitespace-nowrap"
                 >
-                  {copied ? 'Copied!' : 'Copy'}
+                  {copiedRedirect ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
@@ -223,6 +279,115 @@ export default function Settings() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Spotify Enhanced Credits Section */}
+      <div className="bg-white shadow rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">
+          Enhanced Spotify Credits (Optional)
+        </h2>
+        <p className="text-sm text-gray-600 mb-4">
+          Enable auto-fill for band members using your Spotify session cookie. This provides access to full track credits without requiring your password.
+        </p>
+
+        <div className="border border-yellow-200 bg-yellow-50 rounded-lg p-4 mb-4">
+          <h3 className="text-sm font-semibold text-yellow-900 mb-2">
+            ⚠️ Security Notice
+          </h3>
+          <ul className="text-sm text-yellow-800 space-y-1 list-disc list-inside">
+            <li>This feature is <strong>completely optional</strong></li>
+            <li>Your session cookie is stored locally and never shared</li>
+            <li>The cookie expires automatically after a few weeks</li>
+            <li>You can revoke access by logging out of Spotify</li>
+            <li>Only use this on your personal computer</li>
+          </ul>
+        </div>
+
+        <div className="border border-gray-200 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center space-x-3">
+              <h3 className="text-sm font-semibold text-gray-900">
+                Spotify Session Cookie (sp_dc)
+              </h3>
+              {spotifySession.configured ? (
+                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                  Configured
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                  Not Set
+                </span>
+              )}
+            </div>
+            <div className="flex space-x-2">
+              {spotifySession.configured && !editingSession && (
+                <button
+                  onClick={deleteSpotifySession}
+                  className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition"
+                >
+                  Remove
+                </button>
+              )}
+              {!editingSession && (
+                <button
+                  onClick={() => setEditingSession(true)}
+                  className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                >
+                  {spotifySession.configured ? 'Update' : 'Add'}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {editingSession ? (
+            <div className="mt-3 space-y-3">
+              <textarea
+                value={sessionCookie}
+                onChange={(e) => setSessionCookie(e.target.value)}
+                placeholder="Paste your sp_dc cookie value here"
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
+              />
+              <div className="flex space-x-2">
+                <button
+                  onClick={saveSpotifySession}
+                  disabled={saving || !sessionCookie}
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  onClick={() => { setEditingSession(false); setSessionCookie(''); }}
+                  disabled={saving}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : spotifySession.configured && (
+            <div className="mt-2">
+              <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-600">
+                ••••••••
+              </code>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-2">
+            How to get your session cookie:
+          </h3>
+          <ol className="space-y-2 text-sm text-gray-700 list-decimal list-inside">
+            <li>Open <a href="https://open.spotify.com" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">open.spotify.com</a> and log in</li>
+            <li>Right-click anywhere and select "Inspect" or press F12</li>
+            <li>Go to the "Application" tab (Chrome) or "Storage" tab (Firefox)</li>
+            <li>Click "Cookies" → "https://open.spotify.com"</li>
+            <li>Find the cookie named <code className="bg-white px-1 py-0.5 rounded text-xs">sp_dc</code></li>
+            <li>Double-click the "Value" column and copy the entire value</li>
+            <li>Paste it in the field above and click Save</li>
+          </ol>
+        </div>
       </div>
 
       {/* API Keys Section */}

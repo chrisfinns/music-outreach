@@ -232,6 +232,18 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
                 </button>
               )}
 
+              {!band.generatedMessage && band.messageStatus !== 'generating' && band.messageStatus !== 'failed' && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                  <p className="text-sm text-yellow-800 mb-2">No message generated yet</p>
+                  <button
+                    onClick={() => onRegenerateMessage(band)}
+                    className="w-full text-sm px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                  >
+                    Generate Message
+                  </button>
+                </div>
+              )}
+
               {band.followUpNotes && (
                 <div>
                   <label className="text-xs font-semibold text-gray-700">Follow-up Notes</label>

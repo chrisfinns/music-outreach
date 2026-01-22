@@ -1,11 +1,13 @@
 const spotifyApi = require('./api');
 const { scrapeInstagramHandlesWithDelay } = require('../scrapers/spotify-playwright');
+const airtableService = require('../airtable-service');
 
 const DEFAULT_FILTERS = {
   popularityMin: 2,
   popularityMax: 40,
   maxYearsSinceRelease: 2,
-  requireInstagram: true
+  requireInstagram: true,
+  skipCrmArtists: true
 };
 
 function evaluatePopularity(artist, filters) {
@@ -101,6 +103,21 @@ function evaluateInstagram(instagramResult, filters) {
 async function analyzePlaylist(playlistId, filters = DEFAULT_FILTERS, onProgress) {
   try {
     const tracks = await spotifyApi.getPlaylistTracks(playlistId);
+
+    // Fetch all existing bands from CRM if filtering is enabled
+    let crmArtistNames = new Set();
+    if (filters.skipCrmArtists) {
+      try {
+        const crmBands = await airtableService.getAllBands();
+        crmArtistNames = new Set(
+          crmBands.map(band => band.bandName.toLowerCase().trim())
+        );
+        console.log(`Loaded ${crmArtistNames.size} artists from CRM for filtering`);
+      } catch (error) {
+        console.error('Error loading CRM artists:', error);
+        // Continue without CRM filtering if there's an error
+      }
+    }
 
     const artistMap = new Map();
     tracks.forEach(track => {
@@ -218,7 +235,16 @@ async function analyzePlaylist(playlistId, filters = DEFAULT_FILTERS, onProgress
       let failureReason = null;
       let confidence = 'high';
 
-      if (artistData.error === 'spotify_data_error') {
+      // Check if artist is already in CRM
+      if (filters.skipCrmArtists && crmArtistNames.has(artistData.name.toLowerCase().trim())) {
+        status = 'removed';
+        failureReason = 'already_in_crm';
+        artistData.crmCheck = {
+          passed: false,
+          reason: 'already_in_crm',
+          details: 'Artist already exists in CRM'
+        };
+      } else if (artistData.error === 'spotify_data_error') {
         status = 'removed';
         failureReason = 'spotify_data_error';
         confidence = 'low';

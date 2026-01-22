@@ -10,7 +10,8 @@ export default function PlaylistCleaner() {
     popularityMin: 2,
     popularityMax: 40,
     maxYearsSinceRelease: 2,
-    requireInstagram: true
+    requireInstagram: true,
+    skipCrmArtists: true
   });
   const [analyzing, setAnalyzing] = useState(false);
   const [results, setResults] = useState(null);
@@ -19,10 +20,22 @@ export default function PlaylistCleaner() {
   const [progress, setProgress] = useState(null);
   const [selectedArtist, setSelectedArtist] = useState(null);
   const [addedArtists, setAddedArtists] = useState(new Set());
+  const [systemPrompt, setSystemPrompt] = useState('');
 
   useEffect(() => {
     checkSpotifyStatus();
+    fetchSystemPrompt();
   }, []);
+
+  async function fetchSystemPrompt() {
+    try {
+      const response = await fetch(`${API_URL}/system-prompt`);
+      const data = await response.json();
+      setSystemPrompt(data.prompt);
+    } catch (error) {
+      console.error('Error fetching system prompt:', error);
+    }
+  }
 
   async function checkSpotifyStatus() {
     try {
@@ -185,7 +198,8 @@ export default function PlaylistCleaner() {
           bandName: formData.bandName,
           members: formData.members,
           song: formData.song,
-          notes: formData.notes
+          notes: formData.notes,
+          systemPrompt
         })
       });
 
@@ -306,6 +320,19 @@ export default function PlaylistCleaner() {
                     </span>
                   </label>
                 </div>
+                <div className="flex items-center">
+                  <label className="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filters.skipCrmArtists}
+                      onChange={(e) => setFilters({ ...filters, skipCrmArtists: e.target.checked })}
+                      className="mr-2 h-5 w-5"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Skip Artists Already in CRM
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <button
@@ -385,7 +412,13 @@ export default function PlaylistCleaner() {
                       <div key={artist.id} className="mb-2 pb-2 border-b border-gray-100 last:border-0">
                         <p className="font-medium">{artist.name}</p>
                         <p className="text-sm text-gray-600">
-                          {artist.failureReason}: {artist.popularityCheck?.details || artist.releaseCheck?.details || artist.instagramCheck?.details}
+                          {artist.failureReason === 'already_in_crm' ? (
+                            <span className="text-purple-600 font-medium">Already in CRM</span>
+                          ) : (
+                            <>
+                              {artist.failureReason}: {artist.popularityCheck?.details || artist.releaseCheck?.details || artist.instagramCheck?.details || artist.crmCheck?.details}
+                            </>
+                          )}
                         </p>
                         <p className="text-xs text-gray-500">
                           {artist.tracks.length} track{artist.tracks.length !== 1 ? 's' : ''}
