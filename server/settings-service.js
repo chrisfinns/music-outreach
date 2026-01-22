@@ -3,28 +3,40 @@ const path = require('path');
 
 class SettingsService {
   constructor() {
-    this.settingsPath = path.join(__dirname, '..', 'settings.json');
+    this.settingsPath = path.join(__dirname, '..', 'settings.local.json');
+    this.templatePath = path.join(__dirname, '..', 'settings.json');
     this.initializeSettings();
   }
 
   initializeSettings() {
+    // Create settings.local.json from template if it doesn't exist
     if (!fs.existsSync(this.settingsPath)) {
-      const defaultSettings = {
-        spotify: {
-          accessToken: null,
-          refreshToken: null,
-          expiresAt: null,
-          connected: false,
-          sessionCookie: null
-        },
-        apiKeys: {
-          anthropic: null,
-          airtable: null,
-          spotifyClientId: null,
-          spotifyClientSecret: null,
-          ngrok: null
-        }
-      };
+      let defaultSettings;
+
+      // Try to load from template first
+      if (fs.existsSync(this.templatePath)) {
+        const templateData = fs.readFileSync(this.templatePath, 'utf8');
+        defaultSettings = JSON.parse(templateData);
+      } else {
+        // Fallback to hardcoded defaults
+        defaultSettings = {
+          spotify: {
+            accessToken: null,
+            refreshToken: null,
+            expiresAt: null,
+            connected: false,
+            sessionCookie: null
+          },
+          apiKeys: {
+            anthropic: null,
+            airtable: null,
+            spotifyClientId: null,
+            spotifyClientSecret: null,
+            ngrok: null
+          }
+        };
+      }
+
       fs.writeFileSync(this.settingsPath, JSON.stringify(defaultSettings, null, 2));
     }
 

@@ -4,7 +4,7 @@ package-lock.json
 
 # Environment variables
 .env
-settings.json
+settings.local.json
 
 # Data files
 crm-data.json

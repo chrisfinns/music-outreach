@@ -1,8 +1,16 @@
 {
   "spotify": {
-    "accessToken": "BQCltufPWp_IP7xXKayJ0cbfzrwt3cHThlEmIU1Trx8aLagAGuBWK0bohATGjwWECEUeQWgQFfzOkfIUOoNHZAU0oqUgBgszzTmGcPJVJF-Rf70JUOisojFA5ja340fHuIViQgT2QS0t0h3EhEY-E7umhEWbT7svfZWKP6epUpkzNoWTR_Ea7n-bEeXbn9JR7-gT3W1RCjJ93ZftkJFrBcJ9ewi9mTRKXm1T5Tz9em6YZXpZ6WKrNDUbnEKI5uiyl6exmiWVYerPVs3YLzuY2mNg99IyH7s218xSsG5m4TjQ2zfk85EuZDw",
-    "refreshToken": "AQCUPwZee7PIYpKNkx4Zbtk4aJTMd23az9R6NKwhr4JW31iy6pg2prtfKB4ua-bpPe6iolPw0aPdLiRkCxmpzdPi1xV4LR0ZVSAt2YQjqwA04Ke1Mv2H600XGqYNW03tlnE",
-    "expiresAt": 1768264223436,
-    "connected": true
+    "accessToken": null,
+    "refreshToken": null,
+    "expiresAt": null,
+    "connected": false,
+    "sessionCookie": null
+  },
+  "apiKeys": {
+    "anthropic": null,
+    "airtable": null,
+    "spotifyClientId": null,
+    "spotifyClientSecret": null,
+    "ngrok": null
   }
 }
