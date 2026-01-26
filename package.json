@@ -6,7 +6,8 @@
   "scripts": {
     "server": "nodemon server/server.js",
     "client": "cd client && npm run dev",
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "clear-ports": "bash scripts/clear-ports.sh",
+    "dev": "npm run clear-ports && concurrently \"npm run server\" \"npm run client\"",
     "build": "cd client && npm install && npm run build",
     "start": "node server/server.js"
   },

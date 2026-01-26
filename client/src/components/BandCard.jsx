@@ -69,8 +69,16 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
   };
 
   const handleOpenInstagram = () => {
-    const handle = band.instagram.replace('@', '');
-    window.open(`https://instagram.com/${handle}`, '_blank');
+    let url = band.instagram;
+
+    // If it's already a full URL, use it directly
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.open(url, '_blank');
+    } else {
+      // Otherwise, treat it as a handle and build the URL
+      const handle = url.replace('@', '');
+      window.open(`https://instagram.com/${handle}`, '_blank');
+    }
   };
 
   const formatDate = (dateString) => {
@@ -190,7 +198,15 @@ function BandCard({ band, onUpdate, onDelete, onRegenerateMessage }) {
                     rows={10}
                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded text-sm"
                   />
-                  <div className="mt-2 flex gap-2 items-center">
+                  <div className="mt-2 flex gap-2 items-center flex-wrap">
+                    <button
+                      onClick={() => {
+                        onUpdate(band.id, { generatedMessage: editData.generatedMessage });
+                      }}
+                      className="text-xs px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                    >
+                      Save Message
+                    </button>
                     <button
                       onClick={handleCopyMessage}
                       className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700"
